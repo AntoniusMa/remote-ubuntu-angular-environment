@@ -1,0 +1,102 @@
+---
+
+- name: Install base dependencies and prepare installation
+  hosts: localhost
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: true
+      become: true
+    - name: Install git
+      apt:
+        name: git
+        state: present
+      become: true
+    - name: Install curl
+      apt:
+        name: git
+        state: present
+      become: true
+    - name: Install wget
+      apt:
+        name: git
+        state: present
+      become: true
+
+- name: Install Zsh and Oh My Zsh
+  hosts: localhost
+  vars:
+    invoking_user: "{{ lookup('env', 'USER') }}"
+  tasks:
+    - name: Install Zsh
+      apt:
+        name: zsh
+        state: present
+      become: true
+    - name: Change default shell to zsh
+      become: true
+      user:
+        name: "{{ invoking_user }}"
+        shell: /bin/zsh
+
+    - name: Download Oh My Zsh installation script
+      get_url:
+        url: https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh
+        dest: /tmp/install_ohmyzsh.sh
+
+    - name: Run Oh My Zsh installation script
+      command: sh /tmp/install_ohmyzsh.sh --unattended
+      register: ohmyzsh_result
+      failed_when: "'FAILED' in ohmyzsh_result.stderr"
+      changed_when: ohmyzsh_result.rc != 0
+
+    - name: Install zsh-autosuggestions
+      ansible.builtin.git:
+        repo: "https://github.com/zsh-users/zsh-autosuggestions.git"
+        dest: /home/{{ invoking_user }}/.oh-my-zsh/custom/plugins/zsh-autosuggestions
+        version: "v0.7.0"
+
+    - name: Install zsh-autocomplet
+      ansible.builtin.git:
+        repo: "https://github.com/zsh-users/zsh-completions"
+        dest: /home/{{ invoking_user }}/.oh-my-zsh/custom/plugins/zsh-completions
+        version: "0.35.0"
+
+    - name: Copy repositories .zshrc configuration file
+      copy:
+        src: "{{ playbook_dir }}/.zshrc"
+        dest: "{{ ansible_env.HOME }}/.zshrc"
+        owner: "{{ ansible_env.USER }}"
+        group: "{{ ansible_env.USER }}"
+        mode: 0644
+
+- name: Install nvm with one default node installation
+  hosts: localhost
+  vars:
+    invoking_user: "{{ lookup('env', 'USER') }}"
+  tasks:
+    - name: Download NVM installation script
+      get_url:
+        url: https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh
+        dest: /tmp/install_nvm.sh
+    - name: Install NVM
+      command: sh /tmp/install_nvm.sh --unattended
+      register: nvm_script_result
+      changed_when: nvm_script_result.rc != 0
+      args:
+        creates: "/home/{{ invoking_user }}/.nvm"
+    - name: Source nvm into current session, install node 20 and set it
+      shell: >
+        /bin/bash -c "source /home/{{ invoking_user }}/.nvm/nvm.sh && nvm install 20 && nvm alias default 20"
+      register: node_version_output
+      changed_when: "'WARNING' in node_version_output.stdout"
+      args:
+        creates: "/home/{{ invoking_user }}/.nvm/alias"
+
+- name: Install Angular CLI globally using npm
+  hosts: localhost
+  tasks:
+    - name: Install Angular
+      npm:
+        name: "@angular/cli"
+        global: true
